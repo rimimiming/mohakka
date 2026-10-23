@@ -18,7 +18,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 회원님의 Firebase 키가 적용되었습니다
     const firebaseConfig = {
       apiKey: "AIzaSyCYRpexjR7NvSN0dhvXJnYml9q1uMtRmkk",
       authDomain: "mohakka-c25f0.firebaseapp.com",
@@ -32,7 +31,6 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // URL 파라미터에서 방 번호 확인 (기본 방: our-trip)
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room') || 'our-trip';
     const tripDocRef = doc(db, "trips", roomId);
@@ -76,7 +74,7 @@
   <div class="w-full max-w-md bg-stone-50 min-h-screen flex flex-col shadow-xl relative pb-28">
     
     <!-- 상단 헤더 -->
-    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-stone-200 safe-top px-5 py-3">
+    <header class="bg-white/85 backdrop-blur-md sticky top-0 z-30 border-b border-stone-200 safe-top px-4 py-3">
       <div class="flex items-center justify-between">
         <div>
           <div class="flex items-center gap-1.5">
@@ -86,16 +84,25 @@
           <h1 class="text-xl font-bold tracking-tight text-stone-800">모하까</h1>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5">
+          <button onclick="openTripManageModal()" class="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors">
+            <i data-lucide="folder-cog" class="w-3.5 h-3.5"></i>
+            여행 관리
+          </button>
           <button onclick="copyInviteLink()" class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors">
             <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-            링크 복사
+            초대
           </button>
         </div>
       </div>
 
-      <!-- 여행 날짜 피커 바 -->
-      <div class="mt-3 p-2.5 bg-stone-100/80 rounded-2xl flex items-center justify-between text-xs text-stone-700">
+      <!-- 1층: 여행 프로젝트 탭 바 (여러 개 여행 일정 전환) -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar mt-3 pb-1" id="tripTabsContainer">
+        <!-- 여행 탭들이 동적으로 렌더링됩니다 -->
+      </div>
+
+      <!-- 2층: 선택된 여행의 기간 설정 바 -->
+      <div class="mt-2 p-2.5 bg-stone-100/90 rounded-2xl flex items-center justify-between text-xs text-stone-700">
         <div class="flex items-center gap-2 flex-1">
           <i data-lucide="calendar" class="w-4 h-4 text-stone-400"></i>
           <input type="date" id="startDate" onchange="updateDates()" class="bg-transparent font-medium focus:outline-none text-stone-800">
@@ -105,32 +112,84 @@
         <span id="tripPeriodBadge" class="bg-white px-2 py-0.5 rounded-lg text-[11px] font-semibold text-stone-600 border border-stone-200">1박 2일</span>
       </div>
 
-      <!-- Day 선택 탭 -->
-      <div class="flex gap-2 overflow-x-auto no-scrollbar mt-3 pb-0.5" id="dayTabsContainer">
-        <!-- 탭 동적 렌더링 -->
+      <!-- 3층: Day 선택 탭 (Day 1, Day 2 등) -->
+      <div class="flex gap-1.5 overflow-x-auto no-scrollbar mt-2.5 pb-0.5" id="dayTabsContainer">
+        <!-- Day 탭 동적 렌더링 -->
       </div>
     </header>
 
-    <!-- 총 경비 요약 바 -->
-    <div class="px-5 py-3 bg-amber-50/50 border-b border-amber-100/60 flex items-center justify-between text-xs">
-      <span class="text-stone-500 font-medium">선택한 날짜 예상 경비</span>
+    <!-- 당일 경비 요약 바 -->
+    <div class="px-4 py-2.5 bg-amber-50/60 border-b border-amber-100/60 flex items-center justify-between text-xs">
+      <span class="text-stone-500 font-medium" id="expenseSummaryTitle">선택한 날짜 예상 경비</span>
       <span class="text-sm font-bold text-amber-900" id="totalExpenseText">0원</span>
     </div>
 
     <!-- 타임테이블 메인 뷰 -->
-    <main class="flex-1 px-5 py-5 overflow-y-auto" id="timelineContainer">
-      <!-- 일정 카드들이 여기에 렌더링됩니다 -->
+    <main class="flex-1 px-4 py-4 overflow-y-auto" id="timelineContainer">
+      <!-- 일정 카드들이 렌더링됩니다 -->
     </main>
 
-    <!-- 하단 고정 추가 버튼 -->
-    <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 safe-bottom z-30 pointer-events-none">
+    <!-- 하단 고정 일정 추가 버튼 -->
+    <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 safe-bottom z-20 pointer-events-none">
       <button onclick="openModal()" class="pointer-events-auto w-full py-3.5 bg-stone-900 hover:bg-stone-800 active:scale-[0.98] text-white rounded-2xl font-semibold shadow-lg shadow-stone-900/10 flex items-center justify-center gap-2 transition-all">
         <i data-lucide="plus" class="w-5 h-5"></i>
         <span>일정 추가하기</span>
       </button>
     </div>
 
-    <!-- 일정 추가/수정 모달 -->
+    <!-- 모달 1: 새 여행 프로젝트 생성 / 수정 -->
+    <div id="tripModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center px-4">
+      <div class="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl">
+        <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+          <h3 class="font-bold text-sm text-stone-800" id="tripModalTitle">새 여행 만들기</h3>
+          <button onclick="closeTripModal()" class="text-stone-400 hover:text-stone-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <form onsubmit="handleTripSubmit(event)" class="mt-4 space-y-3 text-xs">
+          <input type="hidden" id="editTripId">
+          <div>
+            <label class="block font-semibold text-stone-600 mb-1">여행 제목</label>
+            <input type="text" id="tripTitleInput" required placeholder="예: 부산 2박3일, 겨울 제주도, 주말 글램핑" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-stone-600 mb-1">시작일</label>
+              <input type="date" id="tripStartInput" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-2 py-2 text-stone-800 focus:outline-none">
+            </div>
+            <div>
+              <label class="block font-semibold text-stone-600 mb-1">종료일</label>
+              <input type="date" id="tripEndInput" required class="w-full bg-stone-50 border border-stone-200 rounded-xl px-2 py-2 text-stone-800 focus:outline-none">
+            </div>
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button type="button" onclick="closeTripModal()" class="flex-1 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-xl font-semibold">취소</button>
+            <button type="submit" class="flex-1 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-semibold">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 모달 2: 여행 관리 목록 모달 -->
+    <div id="tripManageModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center">
+      <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 safe-bottom max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between pb-3 border-b border-stone-100">
+          <h3 class="font-bold text-sm text-stone-800">여행 목록 관리</h3>
+          <button onclick="closeTripManageModal()" class="text-stone-400 hover:text-stone-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto py-3 space-y-2" id="tripManageList">
+          <!-- 여행 목록 렌더링 -->
+        </div>
+        <button onclick="openNewTripModal()" class="mt-2 w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          새 여행 일정 추가
+        </button>
+      </div>
+    </div>
+
+    <!-- 모달 3: 세부 일정 추가/수정 모달 -->
     <div id="itemModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center">
       <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 safe-bottom max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -162,7 +221,7 @@
 
           <div>
             <label class="block font-semibold text-stone-600 mb-1">장소명</label>
-            <input type="text" id="itemPlace" required placeholder="예: 숙소 체크인, 해운대 해변" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
+            <input type="text" id="itemPlace" required placeholder="예: 숙소 체크인, 오션뷰 카페" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -189,7 +248,7 @@
 
           <div>
             <label class="block font-semibold text-stone-600 mb-1">메모</label>
-            <textarea id="itemMemo" rows="2" placeholder="예약 번호, 추천 메뉴 등" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400 resize-none"></textarea>
+            <textarea id="itemMemo" rows="2" placeholder="예약자명, 추천 메뉴 등" class="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400 resize-none"></textarea>
           </div>
 
           <div class="pt-2 flex gap-2">
@@ -203,97 +262,152 @@
   </div>
 
   <script>
-    // 앱 상태 관리
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+    // 여러 개의 여행 일정을 담는 기본 상태
     let appState = {
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-      selectedDay: 1,
-      items: [
+      activeTripId: 'trip_1',
+      trips: [
         {
-          id: '1',
-          day: 1,
-          time: '11:30',
-          place: '현지 브런치 카페',
-          category: 'cafe',
-          transport: 'walk',
-          duration: '10분',
-          cost: 28000,
-          memo: '테라스 자리 예약 확인',
-          completed: false
-        },
-        {
-          id: '2',
-          day: 1,
-          time: '13:00',
-          place: '전시관 관람',
-          category: 'activity',
-          transport: 'car',
-          duration: '20분',
-          cost: 30000,
-          memo: '모바일 티켓 사전 준비',
-          completed: false
+          id: 'trip_1',
+          title: '주말 힐링 여행',
+          startDate: today,
+          endDate: tomorrow,
+          selectedDay: 1,
+          items: [
+            {
+              id: '1',
+              day: 1,
+              time: '11:30',
+              place: '브런치 카페',
+              category: 'cafe',
+              transport: 'walk',
+              duration: '10분',
+              cost: 32000,
+              memo: '테라스 자리 확인',
+              completed: false
+            },
+            {
+              id: '2',
+              day: 1,
+              time: '13:00',
+              place: '전시관 구경',
+              category: 'activity',
+              transport: 'car',
+              duration: '20분',
+              cost: 26000,
+              memo: '모바일 티켓 입장',
+              completed: false
+            }
+          ]
         }
       ]
     };
 
+    function getCurrentTrip() {
+      let trip = appState.trips.find(t => t.id === appState.activeTripId);
+      if (!trip) {
+        trip = appState.trips[0];
+        appState.activeTripId = trip.id;
+      }
+      return trip;
+    }
+
     function initApp() {
-      document.getElementById('startDate').value = appState.startDate;
-      document.getElementById('endDate').value = appState.endDate;
-      renderDayTabs();
-      renderTimeline();
+      renderAll();
       lucide.createIcons();
     }
 
-    // 원격 변경 수신
     window.onRemoteUpdate = (cloudData) => {
-      if (cloudData.startDate) appState.startDate = cloudData.startDate;
-      if (cloudData.endDate) appState.endDate = cloudData.endDate;
-      if (cloudData.items) appState.items = cloudData.items;
-
-      document.getElementById('startDate').value = appState.startDate;
-      document.getElementById('endDate').value = appState.endDate;
-      renderDayTabs();
-      renderTimeline();
+      if (cloudData && cloudData.trips && cloudData.trips.length > 0) {
+        appState.trips = cloudData.trips;
+        if (cloudData.activeTripId) {
+          appState.activeTripId = cloudData.activeTripId;
+        }
+        renderAll();
+      }
     };
 
     function syncState() {
       if (window.saveTripData) {
         window.saveTripData({
-          startDate: appState.startDate,
-          endDate: appState.endDate,
-          items: appState.items
+          activeTripId: appState.activeTripId,
+          trips: appState.trips
         });
       }
+      renderAll();
+    }
+
+    function renderAll() {
+      const trip = getCurrentTrip();
+      document.getElementById('startDate').value = trip.startDate;
+      document.getElementById('endDate').value = trip.endDate;
+
+      renderTripTabs();
       renderDayTabs();
       renderTimeline();
+      lucide.createIcons();
+    }
+
+    // 1층: 여행 탭 렌더링
+    function renderTripTabs() {
+      const container = document.getElementById('tripTabsContainer');
+      container.innerHTML = '';
+
+      appState.trips.forEach(trip => {
+        const isActive = trip.id === appState.activeTripId;
+        const btn = document.createElement('button');
+        btn.className = `px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+          isActive 
+            ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-sm' 
+            : 'bg-white text-stone-600 hover:bg-stone-200/70 border border-stone-200'
+        }`;
+        btn.innerHTML = `<span>${trip.title}</span>`;
+        btn.onclick = () => {
+          appState.activeTripId = trip.id;
+          syncState();
+        };
+        container.appendChild(btn);
+      });
+
+      // '+' 새 여행 추가 탭 버튼
+      const addBtn = document.createElement('button');
+      addBtn.className = 'px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-500 border border-dashed border-stone-300 flex items-center gap-1 whitespace-nowrap';
+      addBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i> 새 일정';
+      addBtn.onclick = openNewTripModal;
+      container.appendChild(addBtn);
     }
 
     function updateDates() {
-      appState.startDate = document.getElementById('startDate').value;
-      appState.endDate = document.getElementById('endDate').value;
+      const trip = getCurrentTrip();
+      trip.startDate = document.getElementById('startDate').value;
+      trip.endDate = document.getElementById('endDate').value;
       syncState();
     }
 
-    function calculateDays() {
-      const start = new Date(appState.startDate);
-      const end = new Date(appState.endDate);
+    function calculateDays(startDate, endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       const diffTime = end - start;
       const days = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
       return isNaN(days) ? 1 : days;
     }
 
+    // 2층: Day 탭 렌더링
     function renderDayTabs() {
-      const totalDays = calculateDays();
+      const trip = getCurrentTrip();
+      const totalDays = calculateDays(trip.startDate, trip.endDate);
       const container = document.getElementById('dayTabsContainer');
       const badge = document.getElementById('tripPeriodBadge');
       
       badge.textContent = `${totalDays - 1}박 ${totalDays}일`;
-      if (appState.selectedDay > totalDays) appState.selectedDay = 1;
+      if (!trip.selectedDay || trip.selectedDay > totalDays) trip.selectedDay = 1;
 
       container.innerHTML = '';
       for (let i = 1; i <= totalDays; i++) {
         const btn = document.createElement('button');
-        const isActive = appState.selectedDay === i;
+        const isActive = trip.selectedDay === i;
         btn.className = `px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
           isActive 
             ? 'bg-stone-900 text-white shadow-sm' 
@@ -301,29 +415,30 @@
         }`;
         btn.textContent = `Day ${i}`;
         btn.onclick = () => {
-          appState.selectedDay = i;
-          renderDayTabs();
-          renderTimeline();
+          trip.selectedDay = i;
+          syncState();
         };
         container.appendChild(btn);
       }
     }
 
+    // 타임라인 렌더링
     function renderTimeline() {
+      const trip = getCurrentTrip();
       const container = document.getElementById('timelineContainer');
-      const dayItems = appState.items
-        .filter(item => item.day === appState.selectedDay)
+      const dayItems = (trip.items || [])
+        .filter(item => item.day === trip.selectedDay)
         .sort((a, b) => a.time.localeCompare(b.time));
 
-      // 당일 경비 계산
       const totalExp = dayItems.reduce((acc, cur) => acc + (Number(cur.cost) || 0), 0);
       document.getElementById('totalExpenseText').textContent = totalExp.toLocaleString() + '원';
+      document.getElementById('expenseSummaryTitle').textContent = `Day ${trip.selectedDay} 예상 경비`;
 
       if (dayItems.length === 0) {
         container.innerHTML = `
           <div class="py-16 text-center text-stone-400 text-xs">
             <i data-lucide="compass" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
-            아직 등록된 일정이 없어요.<br>아래 버튼을 눌러 일정을 추가해 보세요!
+            '${trip.title}'의 Day ${trip.selectedDay} 일정이 아직 없어요.<br>아래 버튼을 눌러 첫 일정을 등록해 보세요!
           </div>
         `;
         lucide.createIcons();
@@ -346,7 +461,7 @@
       };
 
       let html = '<div class="space-y-3">';
-      dayItems.forEach((item, index) => {
+      dayItems.forEach((item) => {
         html += `
           <div class="bg-white rounded-2xl p-4 border border-stone-200 shadow-sm transition-all ${item.completed ? 'opacity-50' : ''}">
             <div class="flex items-start justify-between">
@@ -375,7 +490,6 @@
           </div>
         `;
 
-        // 다음 목적지 이동 경로 표시
         if (item.transport && item.duration) {
           html += `
             <div class="flex items-center gap-2 pl-6 py-1 text-xs text-stone-400 font-medium">
@@ -394,7 +508,8 @@
     }
 
     function toggleComplete(id) {
-      const item = appState.items.find(i => i.id === id);
+      const trip = getCurrentTrip();
+      const item = (trip.items || []).find(i => i.id === id);
       if (item) {
         item.completed = !item.completed;
         syncState();
@@ -403,19 +518,129 @@
 
     function deleteItem(id) {
       if (confirm('이 일정을 삭제할까요?')) {
-        appState.items = appState.items.filter(i => i.id !== id);
+        const trip = getCurrentTrip();
+        trip.items = (trip.items || []).filter(i => i.id !== id);
         syncState();
       }
     }
 
+    // 여행 모달 관련 함수
+    function openNewTripModal() {
+      document.getElementById('tripModalTitle').textContent = '새 여행 추가';
+      document.getElementById('editTripId').value = '';
+      document.getElementById('tripTitleInput').value = '';
+      document.getElementById('tripStartInput').value = today;
+      document.getElementById('tripEndInput').value = tomorrow;
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function closeTripModal() {
+      document.getElementById('tripModal').classList.add('hidden');
+    }
+
+    function handleTripSubmit(e) {
+      e.preventDefault();
+      const editId = document.getElementById('editTripId').value;
+      const title = document.getElementById('tripTitleInput').value.trim();
+      const start = document.getElementById('tripStartInput').value;
+      const end = document.getElementById('tripEndInput').value;
+
+      if (editId) {
+        const trip = appState.trips.find(t => t.id === editId);
+        if (trip) {
+          trip.title = title;
+          trip.startDate = start;
+          trip.endDate = end;
+        }
+      } else {
+        const newTrip = {
+          id: 'trip_' + Date.now(),
+          title: title,
+          startDate: start,
+          endDate: end,
+          selectedDay: 1,
+          items: []
+        };
+        appState.trips.push(newTrip);
+        appState.activeTripId = newTrip.id;
+      }
+
+      closeTripModal();
+      closeTripManageModal();
+      syncState();
+    }
+
+    function openTripManageModal() {
+      const listContainer = document.getElementById('tripManageList');
+      listContainer.innerHTML = '';
+
+      appState.trips.forEach(trip => {
+        const isCurrent = trip.id === appState.activeTripId;
+        const row = document.createElement('div');
+        row.className = `p-3 rounded-2xl border flex items-center justify-between text-xs ${isCurrent ? 'bg-amber-50/70 border-amber-300' : 'bg-stone-50 border-stone-200'}`;
+        row.innerHTML = `
+          <div>
+            <div class="font-bold text-stone-800 flex items-center gap-1.5">
+              ${trip.title}
+              ${isCurrent ? '<span class="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-md font-bold">선택됨</span>' : ''}
+            </div>
+            <div class="text-[11px] text-stone-500 mt-0.5">${trip.startDate} ~ ${trip.endDate}</div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="editTripInfo('${trip.id}')" class="p-1.5 text-stone-500 hover:text-stone-800">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+            ${appState.trips.length > 1 ? `
+              <button onclick="deleteTrip('${trip.id}')" class="p-1.5 text-stone-400 hover:text-rose-600">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
+        `;
+        listContainer.appendChild(row);
+      });
+
+      document.getElementById('tripManageModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeTripManageModal() {
+      document.getElementById('tripManageModal').classList.add('hidden');
+    }
+
+    function editTripInfo(tripId) {
+      const trip = appState.trips.find(t => t.id === tripId);
+      if (!trip) return;
+      document.getElementById('tripModalTitle').textContent = '여행 정보 수정';
+      document.getElementById('editTripId').value = trip.id;
+      document.getElementById('tripTitleInput').value = trip.title;
+      document.getElementById('tripStartInput').value = trip.startDate;
+      document.getElementById('tripEndInput').value = trip.endDate;
+      document.getElementById('tripModal').classList.remove('hidden');
+    }
+
+    function deleteTrip(tripId) {
+      if (confirm('이 여행 일정을 정말 통째로 삭제할까요?')) {
+        appState.trips = appState.trips.filter(t => t.id !== tripId);
+        if (appState.activeTripId === tripId) {
+          appState.activeTripId = appState.trips[0].id;
+        }
+        syncState();
+        openTripManageModal();
+      }
+    }
+
+    // 세부 일정 모달 함수
     function openModal(editId = null) {
       const modal = document.getElementById('itemModal');
       const form = document.getElementById('scheduleForm');
       form.reset();
       document.getElementById('editItemId').value = '';
 
+      const trip = getCurrentTrip();
+
       if (editId) {
-        const item = appState.items.find(i => i.id === editId);
+        const item = (trip.items || []).find(i => i.id === editId);
         if (item) {
           document.getElementById('modalTitle').textContent = '일정 수정';
           document.getElementById('editItemId').value = item.id;
@@ -441,11 +666,13 @@
 
     function handleFormSubmit(e) {
       e.preventDefault();
-      const editId = document.getElementById('editItemId').value;
+      const trip = getCurrentTrip();
+      if (!trip.items) trip.items = [];
 
+      const editId = document.getElementById('editItemId').value;
       const itemData = {
         id: editId || Date.now().toString(),
-        day: appState.selectedDay,
+        day: trip.selectedDay,
         time: document.getElementById('itemTime').value,
         category: document.getElementById('itemCategory').value,
         place: document.getElementById('itemPlace').value,
@@ -457,13 +684,13 @@
       };
 
       if (editId) {
-        const idx = appState.items.findIndex(i => i.id === editId);
+        const idx = trip.items.findIndex(i => i.id === editId);
         if (idx !== -1) {
-          itemData.completed = appState.items[idx].completed;
-          appState.items[idx] = itemData;
+          itemData.completed = trip.items[idx].completed;
+          trip.items[idx] = itemData;
         }
       } else {
-        appState.items.push(itemData);
+        trip.items.push(itemData);
       }
 
       closeModal();
@@ -473,9 +700,9 @@
     function copyInviteLink() {
       const shareUrl = window.location.origin + window.location.pathname + '?room=' + (window.currentRoomId || 'our-trip');
       navigator.clipboard.writeText(shareUrl).then(() => {
-        alert('카톡 공유용 링크가 복사되었습니다! 남자친구에게 전송하세요.');
+        alert('카톡 공유용 초대 링크가 복사되었습니다!');
       }).catch(() => {
-        prompt('아래 링크를 복사해서 공유하세요:', shareUrl);
+        prompt('아래 링크를 복사해 공유하세요:', shareUrl);
       });
     }
 
